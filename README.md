@@ -161,7 +161,7 @@ gráficos e mapas no Looker Studio.
 https://datastudio.google.com/reporting/4f23da42-5bea-4039-8d5f-81b7173464c3
 
 ### Prévia do Painel
-![Preview do Dashboard]
+![Preview do Dashboard] (assets/Preview.png)
 
 ## 6. Recomendações e Plano de Ação
 
