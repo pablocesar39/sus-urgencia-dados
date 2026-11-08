@@ -1,1 +1,117 @@
 
+2. Fontes de Dados Públicas (BigQuery)
+
+Para garantir escalabilidade, utilizamos datasets consolidados de internação hospitalar hospedados no 
+**Google BigQuery** (via projeto *Base dos Dados*).
+
+| Fonte de Dados | Descrição | Tipo de Dados | Método de Acesso |
+| :--- | :--- | :--- | :--- |
+| **DataSUS (SIHSUS)** | Dados de internações hospitalares e Autorizações de Internação Hospitalar (AIH).
+ | Estruturado | SQL via BigQuery (`basedosdados.br_ms_sih.aihs_reduzidas`) |
+| **IBGE (Municípios)** | Diretório de municípios e diretrizes territoriais. | 
+Estruturado | SQL via BigQuery (`basedosdados.br_bd_diretorios_brasil.municipio`) |
+
+---
+
+## 3. Scripts SQL de Modelagem e Tratamento (Dataset: `projetosemantix-512020.dados_sus`)
+
+### Script 1: Mapeamento de Pressão de Fluxo Regional (Origem do Paciente)
+```sql
+CREATE OR REPLACE TABLE `projetosemantix-512020.dados_sus.tb_fluxo_regional` AS
+SELECT 
+    CASE SUBSTR(id_municipio_estabelecimento, 1, 2)
+        WHEN '11' THEN 'RO' WHEN '12' THEN 'AC' WHEN '13' THEN 'AM' WHEN '14' THEN 'RR'
+        WHEN '15' THEN 'PA' WHEN '16' THEN 'AP' WHEN '17' THEN 'TO' WHEN '21' THEN 'MA'
+        WHEN '22' THEN 'PI' WHEN '23' THEN 'CE' WHEN '24' THEN 'RN' WHEN '25' THEN 'PB'
+        WHEN '26' THEN 'PE' WHEN '27' THEN 'AL' WHEN '28' THEN 'SE' WHEN '29' THEN 'BA'
+        WHEN '31' THEN 'MG' WHEN '32' THEN 'ES' WHEN '33' THEN 'RJ' WHEN '35' THEN 'SP'
+        WHEN '41' THEN 'PR' WHEN '42' THEN 'SC' WHEN '43' THEN 'RS' WHEN '50' THEN 'MS'
+        WHEN '51' THEN 'MT' WHEN '52' THEN 'GO' WHEN '53' THEN 'DF'
+        ELSE 'Outro'
+    END AS uf_estabelecimento,
+    CASE 
+        WHEN id_municipio_paciente = id_municipio_estabelecimento THEN 'Local'
+        ELSE 'Outro Município (Migrante)'
+    END AS origem_paciente,
+    COUNT(id_aih) AS total_internacoes
+FROM 
+    `basedosdados.br_ms_sih.aihs_reduzidas`
+WHERE 
+    ano = 2023 
+    AND carater_internacao = '2'
+GROUP BY 
+    uf_estabelecimento, 
+    origem_paciente;
+
+Script 2: Identificação de Padrões Sazonais de Atendimento
+
+
+CREATE OR REPLACE TABLE `projetosemantix-512020.dados_sus.tb_sazonalidade_atendimento` AS
+WITH dados_agregados AS (
+    SELECT 
+        CASE SUBSTR(id_municipio_estabelecimento, 1, 2)
+            WHEN '11' THEN 'RO' WHEN '12' THEN 'AC' WHEN '13' THEN 'AM' WHEN '14' THEN 'RR'
+            WHEN '15' THEN 'PA' WHEN '16' THEN 'AP' WHEN '17' THEN 'TO' WHEN '21' THEN 'MA'
+            WHEN '22' THEN 'PI' WHEN '23' THEN 'CE' WHEN '24' THEN 'RN' WHEN '25' THEN 'PB'
+            WHEN '26' THEN 'PE' WHEN '27' THEN 'AL' WHEN '28' THEN 'SE' WHEN '29' THEN 'BA'
+            WHEN '31' THEN 'MG' WHEN '32' THEN 'ES' WHEN '33' THEN 'RJ' WHEN '35' THEN 'SP'
+            WHEN '41' THEN 'PR' WHEN '42' THEN 'SC' WHEN '43' THEN 'RS' WHEN '50' THEN 'MS'
+            WHEN '51' THEN 'MT' WHEN '52' THEN 'GO' WHEN '53' THEN 'DF'
+            ELSE 'Outro'
+        END AS sigla_uf,
+        mes,
+        COUNT(id_aih) AS volume_atendimentos
+    FROM 
+        `basedosdados.br_ms_sih.aihs_reduzidas`
+    WHERE 
+        ano = 2023
+    GROUP BY 
+        sigla_uf, 
+        mes
+)
+SELECT 
+    sigla_uf,
+    mes,
+    volume_atendimentos,
+    AVG(volume_atendimentos) OVER(PARTITION BY sigla_uf) AS media_mensal_uf
+FROM 
+    dados_agregados
+ORDER BY 
+    sigla_uf, 
+    mes;
+
+
+Script 3: Agregação e Custo Médio por Município
+
+
+CREATE OR REPLACE TABLE `projetosemantix-512020.dados_sus.tb_urgencia_municipio` AS
+WITH urgencia_tratada AS (
+  SELECT 
+    id_municipio_estabelecimento AS municipio_id,
+    DATE(CAST(ano AS INT64), CAST(mes AS INT64), 1) AS data_atendimento,
+    COUNT(id_aih) AS total_procedimentos,
+    SUM(valor_aih) AS custo_total
+  FROM 
+    `basedosdados.br_ms_sih.aihs_reduzidas`
+  WHERE 
+    ano >= 2022
+    AND carater_internacao = '2'
+  GROUP BY 
+    municipio_id, data_atendimento
+)
+SELECT 
+  u.municipio_id,
+  m.nome AS nome_municipio,
+  m.sigla_uf,
+  u.data_atendimento,
+  u.total_procedimentos,
+  u.custo_total,
+  SAFE_DIVIDE(u.custo_total, u.total_procedimentos) AS custo_medio_por_atendimento
+FROM 
+  urgencia_tratada u
+LEFT JOIN 
+  `basedosdados.br_bd_diretorios_brasil.municipio` m 
+ON 
+  u.municipio_id = m.id_municipio
+ORDER BY 
+  u.total_procedimentos DESC;
