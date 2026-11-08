@@ -153,11 +153,11 @@ Concentração por Estado: Estados como São Paulo e Minas Gerais absorvem volum
 demanda local quanto migrante.
 
 ## 5. Visualização no Looker Studio
-O projeto está estruturado com tabelas agregadas e otimizadas no BigQuery (projetosemantix-512020.dados_sus),
-garantindo alta performance, carregamento instantâneo e ausência de travamentos ao alimentar os 
-gráficos e mapas no Looker Studio.
+O projeto está estruturado com tabelas agregadas e otimizadas no BigQuery (`projetosemantix-512020.dados_sus`), garantindo alta performance, carregamento instantâneo e ausência de travamentos ao alimentar os gráficos e mapas no Looker Studio.
 
-**[Acessar o Dashboard Interativo no Looker Studio](https://datastudio.google.com/reporting/4f23da42-5bea-4039-8d5f-81b7173464c3)**
+🔗 **[Acessar o Dashboard Interativo no Looker Studio](https://datastudio.google.com/reporting/4f23da42-5bea-4039-8d5f-81b7173464c3)**
+
+---
 
 ### Prévia do Painel
 ![Preview do Dashboard](assets/Preview.png)
